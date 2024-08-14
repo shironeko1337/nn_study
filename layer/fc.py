@@ -1,4 +1,5 @@
 import numpy as np
+import initializer.initializers as initializer
 
 
 class FullConnectedLayer:
@@ -18,29 +19,31 @@ class FullConnectedLayer:
     # is_last: true
     # self.label - labels (output_size_of_network,1)
     # output_delta - delta for the output layer, only exists if it's the last layer
-    def __init__(self, activator, input_size, output_size, is_first = False, is_last = False):
+    def __init__(self, activator, input_size, output_size, initializer, is_first=False, is_last=False):
         self.activator = activator
         self.input_size = input_size
         self.output_size = output_size
         self.is_first = is_first
         self.is_last = is_last
-        self.initialize()
+        self.initialize(initializer)
         self.label = None
         self.output_delta = None
         self.delta = None
 
-    def initialize(self):
+    def initialize(self, initializer):
         # Here W must be initialized to 0 for mnist dataset, because a 0-1 randomized matrix
         # would cause result of sigmoid function to intially be 1 (1/(1 + e^(-x))) when x is large
-        self.W = np.zeros((self.input_size, self.output_size))
-        self.b = np.zeros((self.output_size,1))
+        # self.W = np.zeros((self.input_size, self.output_size))
+        self.W = initializer(self.input_size, self.output_size)
+        self.b = np.zeros((self.output_size, 1))
 
     # predict
     def forward(self):
-        self.output =  self.activator.forward(np.dot(self.input.T, self.W).T + self.b)
+        self.output_x = np.dot(self.input.T, self.W).T + self.b
+        self.output = self.activator.forward(self.output_x)
 
     # back propagation
-    def backward(self,next_delta):
+    def backward(self, next_delta):
         # For the last layer, we calculate two type of delta,
         # one is from the final output, which directly calculates the loss,
         # one is from the delta from next layer, for calculating the weight
@@ -48,15 +51,16 @@ class FullConnectedLayer:
         #
         # For the other layers, we only calculate the later one.
         if self.is_last:
-          self.output_delta = self.activator.backward_y(self.output) * (self.label - self.output)
-          next_delta = self.output_delta
+            self.output_delta = self.activator.backward(
+                self.output_x, self.output) * (self.label - self.output)
+            next_delta = self.output_delta
         if not self.is_first:
-          self.delta = self.activator.backward_y(self.input) * np.dot(self.W,next_delta)
-        self.W_grad = np.dot(self.input, next_delta.T) # ∇w = xi ⊗ δj
-        self.B_grad = next_delta # x = 1
+            self.delta = self.activator.backward(
+                self.input_x, self.input) * np.dot(self.W, next_delta)
+        self.W_grad = np.dot(self.input, next_delta.T)  # ∇w = xi ⊗ δj
+        self.B_grad = next_delta  # x = 1
         return self.delta
 
-    def update(self,learning_rate):
+    def update(self, learning_rate):
         self.W += learning_rate * self.W_grad
         self.b += learning_rate * self.B_grad
-
